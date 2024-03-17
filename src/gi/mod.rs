@@ -1,7 +1,10 @@
 use bevy::asset::load_internal_asset;
+use bevy::core_pipeline::core_2d::graph::{Core2d, Node2d};
 use bevy::prelude::*;
+use bevy::render::extract_component::{ExtractComponentPlugin, UniformComponentPlugin};
 use bevy::render::extract_resource::ExtractResourcePlugin;
-use bevy::render::render_graph::{self, RenderGraph, RenderLabel};
+use bevy::render::render_asset::RenderAssetPlugin;
+use bevy::render::render_graph::{self, RenderGraph, RenderGraphApp, RenderLabel, ViewNodeRunner};
 use bevy::render::render_resource::*;
 use bevy::render::renderer::RenderContext;
 use bevy::render::{Render, RenderApp, RenderSet};
@@ -12,16 +15,14 @@ use self::pipeline::GiTargets;
 use crate::gi::compositing::{setup_post_processing_camera, CameraTargets, PostProcessingMaterial};
 use crate::gi::constants::*;
 use crate::gi::pipeline::{
-    system_queue_bind_groups,
-    system_setup_gi_pipeline,
-    GiTargetsWrapper,
-    LightPassPipeline,
+    system_queue_bind_groups, system_setup_gi_pipeline, GiTargetsWrapper, LightPassPipeline,
     LightPassPipelineBindGroups,
 };
 use crate::gi::pipeline_assets::{
-    system_extract_pipeline_assets,
-    system_prepare_pipeline_assets,
-    LightPassPipelineAssets,
+    system_extract_pipeline_assets, system_prepare_pipeline_assets, LightPassPipelineAssets,
+};
+use crate::gi::post_process::{
+    LightPostProcessNode, LightPostProcessPipeline, LightPostProcessSettings,
 };
 use crate::gi::resource::ComputedTargetSizes;
 use crate::prelude::BevyMagicLight2DSettings;
@@ -32,6 +33,7 @@ mod pipeline_assets;
 mod types_gpu;
 
 pub mod compositing;
+pub mod post_process;
 pub mod render_layer;
 pub mod resource;
 pub mod types;
@@ -44,13 +46,13 @@ pub struct BevyMagicLight2DPlugin;
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub struct LightPass2DRenderLabel;
 
-impl Plugin for BevyMagicLight2DPlugin
-{
-    fn build(&self, app: &mut App)
-    {
+impl Plugin for BevyMagicLight2DPlugin {
+    fn build(&self, app: &mut App) {
         app.add_plugins((
             ExtractResourcePlugin::<GiTargetsWrapper>::default(),
-            Material2dPlugin::<PostProcessingMaterial>::default(),
+            ExtractComponentPlugin::<LightPostProcessSettings>::default(),
+            // Material2dPlugin::<PostProcessingMaterial>::default(),
+            UniformComponentPlugin::<LightPostProcessSettings>::default(),
         ))
         .init_resource::<CameraTargets>()
         .init_resource::<GiTargetsWrapper>()
@@ -60,12 +62,16 @@ impl Plugin for BevyMagicLight2DPlugin
             PreStartup,
             (
                 detect_target_sizes,
-                system_setup_gi_pipeline.after(detect_target_sizes),
-                setup_post_processing_camera.after(system_setup_gi_pipeline),
+                system_setup_gi_pipeline,
+                // Replacing PostProcessingCamera:
+                // setup_post_processing_camera,
+                // system_setup_gi_pipeline.after(detect_target_sizes),
+                // setup_post_processing_camera.after(system_setup_gi_pipeline),
             )
                 .chain(),
-        )
-        .add_systems(PreUpdate, handle_window_resize);
+        );
+        // Requires PostProcessingMaterial:
+        // .add_systems(PreUpdate, handle_window_resize);
 
         load_internal_asset!(
             app,
@@ -108,7 +114,11 @@ impl Plugin for BevyMagicLight2DPlugin
             "shaders/gi_raymarch.wgsl",
             Shader::from_wgsl
         );
-        let render_app = app.sub_app_mut(RenderApp);
+
+        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+            return;
+        };
+
         render_app
             .add_systems(ExtractSchedule, system_extract_pipeline_assets)
             .add_systems(
@@ -124,16 +134,40 @@ impl Plugin for BevyMagicLight2DPlugin
         render_graph.add_node_edge(
             LightPass2DRenderLabel,
             bevy::render::graph::CameraDriverLabel,
-        )
+        );
+        render_app
+            .add_render_graph_node::<ViewNodeRunner<LightPostProcessNode>>(
+                Core2d,
+                LightPostProcessNode,
+            )
+            .add_render_graph_edges(
+                Core2d,
+                (
+                    Node2d::Tonemapping,
+                    LightPostProcessNode,
+                    Node2d::EndMainPassPostProcessing,
+                ),
+            );
+
+        // let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
+        // render_graph
+        //     .add_node::<ViewNodeRunner<LightPostProcessPipeline>>(Core2d, LightPostProcessNode);
+        // render_graph.add_node(LightPass2DRenderLabel, LightPass2DNode::default());
+        // render_graph.add_node_edge(
+        //     LightPass2DRenderLabel,
+        //     bevy::render::graph::CameraDriverLabel,
+        // )
     }
 
-    fn finish(&self, app: &mut App)
-    {
-        let render_app = app.sub_app_mut(RenderApp);
+    fn finish(&self, app: &mut App) {
+        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+            return;
+        };
         render_app
             .init_resource::<LightPassPipeline>()
             .init_resource::<LightPassPipelineAssets>()
-            .init_resource::<ComputedTargetSizes>();
+            .init_resource::<ComputedTargetSizes>()
+            .init_resource::<LightPostProcessPipeline>();
     }
 }
 
@@ -195,8 +229,7 @@ pub fn detect_target_sizes(
     *res_target_sizes = ComputedTargetSizes::from_window(window, &res_plugin_config.target_scaling_params);
 }
 
-impl render_graph::Node for LightPass2DNode
-{
+impl render_graph::Node for LightPass2DNode {
     fn update(&mut self, _world: &mut World) {}
 
     #[rustfmt::skip]
