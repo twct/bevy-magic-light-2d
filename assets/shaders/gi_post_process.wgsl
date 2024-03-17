@@ -29,8 +29,10 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let texture_color = textureSample(screen_texture, texture_sampler, in.uv);
     let irradiance_texture_color = textureSample(irradiance_texture, irradiance_sampler, in.uv);
 
-    // let irradiance_srgb = lin_to_srgb(irradiance_texture_color);
+    let irradiance_srgb = lin_to_srgb(irradiance_texture_color.xyz);
+    let final_color = texture_color.xyz * irradiance_srgb.xyz;
 
     // return texture_color;
-    return irradiance_texture_color;
+    // return irradiance_texture_color;
+    return vec4<f32>(final_color.xyz, 1.0);
 }
