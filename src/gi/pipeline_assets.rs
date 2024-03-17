@@ -13,9 +13,8 @@ use crate::gi::types_gpu::{
     GpuSkylightMaskData,
 };
 use crate::prelude::BevyMagicLight2DSettings;
-use crate::FloorCamera;
 
-use super::post_process::{LightPostProcessPipeline, LightPostProcessSettings};
+use super::post_process::LightPostProcessSettings;
 
 #[rustfmt::skip]
 #[derive(Default, Resource)]
