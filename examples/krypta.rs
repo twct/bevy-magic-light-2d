@@ -4,6 +4,7 @@ use bevy::render::texture::{ImageFilterMode, ImageSamplerDescriptor};
 use bevy::render::view::RenderLayers;
 use bevy::sprite::MaterialMesh2dBundle;
 use bevy::window::PrimaryWindow;
+use bevy_magic_light_2d::gi::post_process::LightPostProcessSettings;
 use bevy_magic_light_2d::prelude::*;
 use rand::prelude::*;
 
@@ -20,8 +21,10 @@ pub struct MouseLight;
 #[derive(Component)]
 pub struct Movable;
 
-fn main()
-{
+#[derive(Component)]
+struct MainCamera;
+
+fn main() {
     // Basic setup.
     App::new()
         .insert_resource(ClearColor(Color::rgba_u8(0, 0, 0, 0)))
@@ -65,7 +68,7 @@ fn main()
         .register_type::<SkylightLight2D>()
         .register_type::<BevyMagicLight2DSettings>()
         .register_type::<LightPassParams>()
-        .add_systems(Startup, setup.after(setup_post_processing_camera))
+        .add_systems(Startup, setup)
         .add_systems(Update, system_move_camera)
         .add_systems(Update, system_control_mouse_light.after(system_move_camera))
         .run();
@@ -77,11 +80,9 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    camera_targets: Res<CameraTargets>,
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlasLayout>>,
-)
-{
+) {
     // Utility functions to compute Z coordinate for floor and ground objects.
     let get_floor_z = |y| -> f32 { Z_BASE_FLOOR - y / SCREEN_SIZE.1 };
     let get_object_z = |y| -> f32 { Z_BASE_OBJECTS - y / SCREEN_SIZE.1 };
@@ -179,12 +180,12 @@ fn setup(
                         },
                         atlas: TextureAtlas {
                             layout: floor_atlas.clone(),
-                            index:  id,
+                            index: id,
                         },
                         texture: floor_image.clone(),
                         ..default()
                     })
-                    .insert(RenderLayers::from_layers(CAMERA_LAYER_FLOOR))
+                    // .insert(RenderLayers::from_layers(CAMERA_LAYER_FLOOR))
                     .id(),
             );
         }
@@ -307,12 +308,12 @@ fn setup(
                             },
                             atlas: TextureAtlas {
                                 layout: wall_atlas.clone(),
-                                index:  id,
+                                index: id,
                             },
                             texture: wall_image.clone(),
                             ..default()
                         })
-                        .insert(RenderLayers::from_layers(CAMERA_LAYER_WALLS))
+                        // .insert(RenderLayers::from_layers(CAMERA_LAYER_WALLS))
                         .insert(occluder_data)
                         .id(),
                 );
@@ -375,12 +376,12 @@ fn setup(
                         },
                         atlas: TextureAtlas {
                             layout: texture_atlas_handle.clone(),
-                            index:  candle_rect_1,
+                            index: candle_rect_1,
                         },
                         texture: decorations_image.clone(),
                         ..default()
                     })
-                    .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
+                    // .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
                     .insert(LightOccluder2D {
                         h_size: Vec2::splat(2.0),
                     })
@@ -408,12 +409,12 @@ fn setup(
                         },
                         atlas: TextureAtlas {
                             layout: texture_atlas_handle.clone(),
-                            index:  candle_rect_2,
+                            index: candle_rect_2,
                         },
                         texture: decorations_image.clone(),
                         ..default()
                     })
-                    .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
+                    // .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
                     .insert(LightOccluder2D {
                         h_size: Vec2::splat(2.0),
                     })
@@ -441,12 +442,12 @@ fn setup(
                         },
                         atlas: TextureAtlas {
                             layout: texture_atlas_handle.clone(),
-                            index:  candle_rect_3,
+                            index: candle_rect_3,
                         },
                         texture: decorations_image.clone(),
                         ..default()
                     })
-                    .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
+                    // .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
                     .insert(LightOccluder2D {
                         h_size: Vec2::splat(2.0),
                     })
@@ -474,12 +475,12 @@ fn setup(
                         },
                         atlas: TextureAtlas {
                             layout: texture_atlas_handle.clone(),
-                            index:  candle_rect_4,
+                            index: candle_rect_4,
                         },
                         texture: decorations_image.clone(),
                         ..default()
                     })
-                    .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
+                    // .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
                     .insert(LightOccluder2D {
                         h_size: Vec2::splat(2.0),
                     })
@@ -506,12 +507,12 @@ fn setup(
                         },
                         atlas: TextureAtlas {
                             layout: texture_atlas_handle.clone(),
-                            index:  tomb_rect_1,
+                            index: tomb_rect_1,
                         },
                         texture: decorations_image.clone(),
                         ..default()
                     })
-                    .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
+                    // .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
                     .insert(LightOccluder2D {
                         h_size: Vec2::new(72.8, 31.0),
                     })
@@ -538,12 +539,12 @@ fn setup(
                         },
                         atlas: TextureAtlas {
                             layout: texture_atlas_handle.clone(),
-                            index:  tomb_rect_1,
+                            index: tomb_rect_1,
                         },
                         texture: decorations_image.clone(),
                         ..default()
                     })
-                    .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
+                    // .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS))
                     .insert(LightOccluder2D {
                         h_size: Vec2::new(72.8, 31.0),
                     })
@@ -571,12 +572,12 @@ fn setup(
                         },
                         atlas: TextureAtlas {
                             layout: texture_atlas_handle.clone(),
-                            index:  sewerage_rect_1,
+                            index: sewerage_rect_1,
                         },
                         texture: decorations_image.clone(),
                         ..default()
                     })
-                    .insert(RenderLayers::from_layers(CAMERA_LAYER_FLOOR)) // Add to floor
+                    // .insert(RenderLayers::from_layers(CAMERA_LAYER_FLOOR)) // Add to floor
                     .insert(Name::new("sewerage_1"))
                     .id(),
             );
@@ -724,10 +725,10 @@ fn setup(
             -1163.2,
             "outdoor_light_9",
             OmniLightSource2D {
-                intensity:          1.2,
-                falloff:            Vec3::new(50.0, 40.0, 0.03),
-                color:              Color::rgb_u8(0, 206, 94),
-                jitter_intensity:   0.7,
+                intensity: 1.2,
+                falloff: Vec3::new(50.0, 40.0, 0.03),
+                color: Color::rgb_u8(0, 206, 94),
+                jitter_intensity: 0.7,
                 jitter_translation: 3.0,
             },
         ));
@@ -738,10 +739,10 @@ fn setup(
             -1210.0,
             "outdoor_light_10",
             OmniLightSource2D {
-                intensity:          1.2,
-                falloff:            Vec3::new(50.0, 40.0, 0.03),
-                color:              Color::rgb_u8(0, 206, 94),
-                jitter_intensity:   0.7,
+                intensity: 1.2,
+                falloff: Vec3::new(50.0, 40.0, 0.03),
+                color: Color::rgb_u8(0, 206, 94),
+                jitter_intensity: 0.7,
                 jitter_translation: 3.0,
             },
         ));
@@ -780,7 +781,7 @@ fn setup(
     // Add skylight light.
     commands.spawn((
         SkylightLight2D {
-            color:     Color::rgb_u8(93, 158, 179),
+            color: Color::rgb_u8(93, 158, 179),
             intensity: 0.025,
         },
         Name::new("global_skylight"),
@@ -821,7 +822,7 @@ fn setup(
             Camera2dBundle {
                 camera: Camera {
                     hdr: false,
-                    target: RenderTarget::Image(camera_targets.floor_target.clone()),
+                    // target: RenderTarget::Image(camera_targets.floor_target.clone()),
                     ..default()
                 },
                 projection: projection.clone(),
@@ -829,52 +830,52 @@ fn setup(
             },
             Name::new("floors_target_camera"),
         ))
-        .insert(SpriteCamera)
-        .insert(FloorCamera)
-        .insert(RenderLayers::from_layers(CAMERA_LAYER_FLOOR));
-    commands
-        .spawn((
-            Camera2dBundle {
-                camera: Camera {
-                    hdr: false,
-                    target: RenderTarget::Image(camera_targets.walls_target.clone()),
-                    ..default()
-                },
-                projection: projection.clone(),
-                ..default()
-            },
-            Name::new("walls_target_camera"),
-        ))
-        .insert(SpriteCamera)
-        .insert(WallsCamera)
-        .insert(RenderLayers::from_layers(CAMERA_LAYER_WALLS));
-    commands
-        .spawn((
-            Camera2dBundle {
-                camera: Camera {
-                    hdr: false,
-                    target: RenderTarget::Image(camera_targets.objects_target.clone()),
-                    ..default()
-                },
-                projection: projection.clone(),
-                ..default()
-            },
-            Name::new("objects_targets_camera"),
-        ))
-        .insert(SpriteCamera)
-        .insert(ObjectsCamera)
-        .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS));
+        .insert(MainCamera)
+        .insert(LightPostProcessSettings { time: 0.0 });
+    // .insert(SpriteCamera)
+    // .insert(FloorCamera)
+    // .insert(RenderLayers::from_layers(CAMERA_LAYER_FLOOR));
+    // commands
+    //     .spawn((
+    //         Camera2dBundle {
+    //             camera: Camera {
+    //                 hdr: false,
+    //                 target: RenderTarget::Image(camera_targets.walls_target.clone()),
+    //                 ..default()
+    //             },
+    //             projection: projection.clone(),
+    //             ..default()
+    //         },
+    //         Name::new("walls_target_camera"),
+    //     ))
+    //     .insert(SpriteCamera)
+    //     .insert(WallsCamera)
+    //     .insert(RenderLayers::from_layers(CAMERA_LAYER_WALLS));
+    // commands.spawn((
+    //     Camera2dBundle {
+    //         camera: Camera {
+    //             hdr: false,
+    //             target: RenderTarget::Image(camera_targets.objects_target.clone()),
+    //             ..default()
+    //         },
+    //         projection: projection.clone(),
+    //         ..default()
+    //     },
+    //     Name::new("objects_targets_camera"),
+    // ))
+    // .insert(SpriteCamera)
+    // .insert(ObjectsCamera)
+    // .insert(RenderLayers::from_layers(CAMERA_LAYER_OBJECTS));
 }
 
 fn system_control_mouse_light(
     mut commands: Commands,
     window: Query<&Window, With<PrimaryWindow>>,
     mut query_light: Query<(&mut Transform, &mut OmniLightSource2D), With<MouseLight>>,
-    query_cameras: Query<(&Camera, &GlobalTransform), With<SpriteCamera>>,
+    query_cameras: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     mouse: Res<ButtonInput<MouseButton>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-)
-{
+) {
     let mut rng = thread_rng();
 
     // We only need to iter over first camera matched.
@@ -920,7 +921,7 @@ fn system_control_mouse_light(
 fn system_move_camera(
     mut camera_current: Local<Vec2>,
     mut camera_target:  Local<Vec2>,
-    mut query_cameras:  Query<&mut Transform, With<SpriteCamera>>,
+    mut query_cameras:  Query<&mut Transform, With<MainCamera>>,
         keyboard:       Res<ButtonInput<KeyCode>>,
 ) {
     let speed = 18.0;

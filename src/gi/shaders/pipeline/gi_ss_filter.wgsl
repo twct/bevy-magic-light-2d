@@ -54,7 +54,6 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
 
     for (var i = -kernel_hl; i <= kernel_hr; i++) {
         for (var j = -kernel_hl; j <= kernel_hr; j++) {
-
             let offset = vec2<i32>(i, j);
 
             let p_grid_pose   = base_probe_grid_pose + offset;
@@ -63,6 +62,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
             // Discard offscreen;
             let p_ndc = screen_to_ndc(p_screen_pose, camera_params.screen_size, camera_params.screen_size_inv);
             if any(p_ndc < vec2<f32>(-1.0)) || any(p_ndc > vec2<f32>(1.0)) {
+            //     // textureStore(ss_filter_out, screen_pose, vec4<f32>(1.0, 0.0, 0.0, 1.0)); // Red for debug
                 continue;
             }
 
@@ -88,7 +88,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
             let d = distance(p_world_pose, sample_world_pose);
             let x = distance(p_sample, base_probe_sample);
             let g = gauss(x) * gauss(d);
-
+ 
             total_q += p_sample * g;
             total_w += g;
         }
@@ -101,6 +101,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
 
     let sdf_uv = world_to_sdf_uv(sample_world_pose, camera_params.view_proj, camera_params.inv_sdf_scale);
 
+    // textureStore(ss_filter_out, screen_pose, vec4<f32>(1.0, 0.0, 0.0, 1.0));
     textureStore(ss_filter_out, screen_pose, vec4<f32>(irradiance.xyz, 1.0));
     textureStore(ss_pose_out, screen_pose, vec4<f32>(sdf_uv, 0.0,  0.0));
 }

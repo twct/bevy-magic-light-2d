@@ -14,6 +14,15 @@
 @group(0) @binding(6) var          sdf_in_sampler:        sampler;
 @group(0) @binding(7) var          ss_probe_out:          texture_storage_2d<rgba16float, write>;
 
+fn invocation_id_to_color(invocation_id: vec3<u32>) -> vec4<f32> {
+    let color = vec4<f32>(
+        f32(invocation_id.x % 255u) / 255.0,  // Red
+        f32(invocation_id.y % 255u) / 255.0,  // Green
+        f32((invocation_id.x + invocation_id.y) % 255u) / 255.0, // Blue
+        1.0,  // Alpha
+    );
+    return color;
+}
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {

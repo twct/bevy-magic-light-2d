@@ -3,16 +3,13 @@ use bevy::core_pipeline::core_2d::graph::{Core2d, Node2d};
 use bevy::prelude::*;
 use bevy::render::extract_component::{ExtractComponentPlugin, UniformComponentPlugin};
 use bevy::render::extract_resource::ExtractResourcePlugin;
-use bevy::render::render_asset::RenderAssetPlugin;
 use bevy::render::render_graph::{self, RenderGraph, RenderGraphApp, RenderLabel, ViewNodeRunner};
 use bevy::render::render_resource::*;
 use bevy::render::renderer::RenderContext;
 use bevy::render::{Render, RenderApp, RenderSet};
-use bevy::sprite::Material2dPlugin;
 use bevy::window::{PrimaryWindow, WindowResized};
 
 use self::pipeline::GiTargets;
-use crate::gi::compositing::{setup_post_processing_camera, CameraTargets, PostProcessingMaterial};
 use crate::gi::constants::*;
 use crate::gi::pipeline::{
     system_queue_bind_groups, system_setup_gi_pipeline, GiTargetsWrapper, LightPassPipeline,
@@ -32,7 +29,7 @@ mod pipeline;
 mod pipeline_assets;
 mod types_gpu;
 
-pub mod compositing;
+// pub mod compositing;
 pub mod post_process;
 pub mod render_layer;
 pub mod resource;
@@ -51,27 +48,16 @@ impl Plugin for BevyMagicLight2DPlugin {
         app.add_plugins((
             ExtractResourcePlugin::<GiTargetsWrapper>::default(),
             ExtractComponentPlugin::<LightPostProcessSettings>::default(),
-            // Material2dPlugin::<PostProcessingMaterial>::default(),
             UniformComponentPlugin::<LightPostProcessSettings>::default(),
         ))
-        .init_resource::<CameraTargets>()
         .init_resource::<GiTargetsWrapper>()
         .init_resource::<BevyMagicLight2DSettings>()
         .init_resource::<ComputedTargetSizes>()
         .add_systems(
             PreStartup,
-            (
-                detect_target_sizes,
-                system_setup_gi_pipeline,
-                // Replacing PostProcessingCamera:
-                // setup_post_processing_camera,
-                // system_setup_gi_pipeline.after(detect_target_sizes),
-                // setup_post_processing_camera.after(system_setup_gi_pipeline),
-            )
-                .chain(),
-        );
-        // Requires PostProcessingMaterial:
-        // .add_systems(PreUpdate, handle_window_resize);
+            (detect_target_sizes, system_setup_gi_pipeline).chain(),
+        )
+        .add_systems(PreUpdate, handle_window_resize);
 
         load_internal_asset!(
             app,
@@ -115,6 +101,50 @@ impl Plugin for BevyMagicLight2DPlugin {
             Shader::from_wgsl
         );
 
+        // Pipeline asset shaders
+
+        load_internal_asset!(
+            app,
+            SHADER_PIPELINE_SDF,
+            "shaders/pipeline/gi_sdf.wgsl",
+            Shader::from_wgsl
+        );
+
+        load_internal_asset!(
+            app,
+            SHADER_PIPELINE_SS_PROBE,
+            "shaders/pipeline/gi_ss_probe.wgsl",
+            Shader::from_wgsl
+        );
+
+        load_internal_asset!(
+            app,
+            SHADER_PIPELINE_SS_BOUNCE,
+            "shaders/pipeline/gi_ss_bounce.wgsl",
+            Shader::from_wgsl
+        );
+
+        load_internal_asset!(
+            app,
+            SHADER_PIPELINE_SS_BLEND,
+            "shaders/pipeline/gi_ss_blend.wgsl",
+            Shader::from_wgsl
+        );
+
+        load_internal_asset!(
+            app,
+            SHADER_PIPELINE_SS_FILTER,
+            "shaders/pipeline/gi_ss_filter.wgsl",
+            Shader::from_wgsl
+        );
+
+        load_internal_asset!(
+            app,
+            SHADER_POST_PROCESS,
+            "shaders/pipeline/gi_post_process.wgsl",
+            Shader::from_wgsl
+        );
+
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
@@ -149,7 +179,7 @@ impl Plugin for BevyMagicLight2DPlugin {
                 ),
             );
 
-        // let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
+        // mut render_graph = render_app.world.resource_mut::<RenderGraph>();
         // render_graph
         //     .add_node::<ViewNodeRunner<LightPostProcessPipeline>>(Core2d, LightPostProcessNode);
         // render_graph.add_node(LightPass2DRenderLabel, LightPass2DNode::default());
@@ -179,7 +209,7 @@ struct LightPass2DNode {}
 pub fn handle_window_resize(
 
     mut assets_mesh:     ResMut<Assets<Mesh>>,
-    mut assets_material: ResMut<Assets<PostProcessingMaterial>>,
+    // mut assets_material: ResMut<Assets<PostProcessingMaterial>>,
     mut assets_image:    ResMut<Assets<Image>>,
 
     query_window: Query<&Window, With<PrimaryWindow>>,
@@ -187,7 +217,6 @@ pub fn handle_window_resize(
         res_plugin_config:      Res<BevyMagicLight2DSettings>,
     mut res_target_sizes:       ResMut<ComputedTargetSizes>,
     mut res_gi_targets_wrapper: ResMut<GiTargetsWrapper>,
-    mut res_camera_targets:     ResMut<CameraTargets>,
 
     mut window_resized_evr: EventReader<WindowResized>,
 ) {
@@ -199,21 +228,13 @@ pub fn handle_window_resize(
         *res_target_sizes =
             ComputedTargetSizes::from_window(window, &res_plugin_config.target_scaling_params);
 
-        assets_mesh.insert(
-            POST_PROCESSING_RECT.clone(),
-            Mesh::from(bevy::math::primitives::Rectangle::new(
-                res_target_sizes.primary_target_size.x,
-                res_target_sizes.primary_target_size.y,
-            )),
-        );
-
-        assets_material.insert(
-            POST_PROCESSING_MATERIAL.clone(),
-            PostProcessingMaterial::create(&res_camera_targets, &res_gi_targets_wrapper),
-        );
+        // assets_material.insert(
+        //     POST_PROCESSING_MATERIAL.clone(),
+        //     PostProcessingMaterial::create(&res_camera_targets, &res_gi_targets_wrapper),
+        // );
 
         *res_gi_targets_wrapper = GiTargetsWrapper{targets: Some(GiTargets::create(&mut assets_image, &res_target_sizes))};
-        *res_camera_targets = CameraTargets::create(&mut assets_image, &res_target_sizes);
+        // *res_camera_targets = CameraTargets::create(&mut assets_image, &res_target_sizes);
     }
 }
 

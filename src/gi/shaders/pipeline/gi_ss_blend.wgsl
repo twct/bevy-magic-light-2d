@@ -27,6 +27,7 @@ fn read_probe(
 
     let clamped_offset = clamp(probe_tile_pose + probe_offset, vec2<i32>(0), tile_size - vec2<i32>(1));
 
+
     // Get position
     let probe_screen_pose = clamped_offset * cfg.probe_size;
     let probe_atlas_pose  = probe_tile_origin + clamped_offset;
@@ -114,7 +115,7 @@ fn estimate_probes_at(
     // Discard if offscreen.
     let base_ndc = world_to_ndc(base_probe.pose, camera_params.view_proj);
     if any(base_ndc <= vec2<f32>(-1.0)) || any(base_ndc >= vec2<f32>(1.0)) {
-        return SampleResult(vec3<f32>(0.0), 0.0);
+        // return SampleResult(vec3<f32>(1.0), 1.0);
     }
 
     // Compute bilateral filter with gauss function
@@ -203,5 +204,13 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     // total_irradiance = log(vec3<f32>(1.0) + total_irradiance + total_irradiance * l);
     total_irradiance = total_irradiance + total_irradiance * l;
 
-    textureStore(ss_blend_out, vec2<i32>(invocation_id.xy), vec4<f32>(total_irradiance, total_weight));
+    
+    // if (invocation_id.y == 0) {
+    //     textureStore(ss_blend_out, vec2<i32>(invocation_id.xy), vec4<f32>(0.0, 1.0, 0.0, 1.0));
+    // } else if (screen_pose.y == 0) {
+    //     textureStore(ss_blend_out, vec2<i32>(invocation_id.xy), vec4<f32>(1.0, 0.0, 0.0, 1.0));
+    // }
+    // else {
+        textureStore(ss_blend_out, vec2<i32>(invocation_id.xy), vec4<f32>(total_irradiance, total_weight));
+    // }
 }

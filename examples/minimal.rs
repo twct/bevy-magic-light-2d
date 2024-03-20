@@ -1,10 +1,13 @@
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::render::camera::RenderTarget;
+use bevy_magic_light_2d::gi::post_process::LightPostProcessSettings;
 use bevy_magic_light_2d::prelude::*;
 
-fn main()
-{
+#[derive(Component)]
+struct MainCamera;
+
+fn main() {
     // Basic setup.
     App::new()
         .insert_resource(ClearColor(Color::rgb_u8(255, 255, 255)))
@@ -22,13 +25,12 @@ fn main()
             LogDiagnosticsPlugin::default(),
             BevyMagicLight2DPlugin,
         ))
-        .add_systems(Startup, setup.after(setup_post_processing_camera))
+        .add_systems(Startup, setup)
         .add_systems(Update, system_move_camera)
         .run();
 }
 
-fn setup(mut commands: Commands, camera_targets: Res<CameraTargets>)
-{
+fn setup(mut commands: Commands) {
     let mut occluders = vec![];
     let occluder_entity = commands
         .spawn((
@@ -109,29 +111,20 @@ fn setup(mut commands: Commands, camera_targets: Res<CameraTargets>)
         .insert(Name::new("lights"))
         .push_children(&lights);
 
-    commands
-        .spawn((
-            Camera2dBundle {
-                camera: Camera {
-                    hdr: true,
-                    target: RenderTarget::Image(camera_targets.floor_target.clone()),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            Name::new("main_camera"),
-            FloorCamera,
-        ))
-        .insert(SpriteCamera);
+    commands.spawn((
+        Camera2dBundle::default(),
+        MainCamera,
+        LightPostProcessSettings { time: 0.0 },
+        Name::new("main_camera"),
+    ));
 }
 
 fn system_move_camera(
     mut camera_target: Local<Vec3>,
-    mut query_camera: Query<&mut Transform, With<SpriteCamera>>,
+    mut query_camera: Query<&mut Transform, With<MainCamera>>,
 
     keyboard: Res<ButtonInput<KeyCode>>,
-)
-{
+) {
     if let Ok(mut camera_transform) = query_camera.get_single_mut() {
         let speed = 10.0;
 

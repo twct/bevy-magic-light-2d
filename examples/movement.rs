@@ -3,13 +3,13 @@ use std::f64::consts::PI;
 use bevy::prelude::*;
 use bevy::render::camera::RenderTarget;
 use bevy_inspector_egui::quick::*;
+use bevy_magic_light_2d::gi::post_process::LightPostProcessSettings;
 use bevy_magic_light_2d::prelude::*;
 
 #[derive(Debug, Component)]
 struct Mover;
 
-fn main()
-{
+fn main() {
     // Basic setup.
     App::new()
         .insert_resource(ClearColor(Color::rgb_u8(255, 255, 255)))
@@ -28,7 +28,7 @@ fn main()
         ))
         .register_type::<BevyMagicLight2DSettings>()
         .register_type::<LightPassParams>()
-        .add_systems(Startup, setup.after(setup_post_processing_camera))
+        .add_systems(Startup, setup)
         .add_systems(Update, system_move_camera)
         .add_systems(Update, move_collider)
         .insert_resource(BevyMagicLight2DSettings {
@@ -44,8 +44,7 @@ fn main()
         .run();
 }
 
-fn setup(mut commands: Commands, camera_targets: Res<CameraTargets>)
-{
+fn setup(mut commands: Commands) {
     let mut occluders = vec![];
     let occluder_entity = commands
         .spawn((
@@ -116,16 +115,9 @@ fn setup(mut commands: Commands, camera_targets: Res<CameraTargets>)
         .push_children(&lights);
 
     commands.spawn((
-        Camera2dBundle {
-            camera: Camera {
-                hdr: true,
-                target: RenderTarget::Image(camera_targets.floor_target.clone()),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
+        Camera2dBundle::default(),
+        LightPostProcessSettings { time: 0.0 },
         Name::new("main_camera"),
-        FloorCamera,
     ));
 }
 
@@ -133,8 +125,7 @@ fn system_move_camera(
     mut camera_target: Local<Vec3>,
     mut query_camera: Query<&mut Transform>,
     keyboard: Res<ButtonInput<KeyCode>>,
-)
-{
+) {
     if let Ok(mut camera_transform) = query_camera.get_single_mut() {
         let speed = 10.0;
 
@@ -159,8 +150,7 @@ fn system_move_camera(
     }
 }
 
-fn move_collider(mut query_mover: Query<&mut Transform, With<Mover>>, time: Res<Time>)
-{
+fn move_collider(mut query_mover: Query<&mut Transform, With<Mover>>, time: Res<Time>) {
     let radius = 100.;
     let cycle_secs = 5.;
     let elapsed = time.elapsed().as_secs_f64();

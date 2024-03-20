@@ -4,21 +4,19 @@ use bevy::render::render_asset::{RenderAssetUsages, RenderAssets};
 use bevy::render::render_resource::*;
 use bevy::render::renderer::RenderDevice;
 use bevy::render::texture::{
-    ImageAddressMode,
-    ImageFilterMode,
-    ImageSampler,
-    ImageSamplerDescriptor,
+    ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor, TextureFormatPixelInfo,
 };
 
 use crate::gi::pipeline_assets::LightPassPipelineAssets;
 use crate::gi::resource::ComputedTargetSizes;
 use crate::gi::types_gpu::{
-    GpuCameraParams,
-    GpuLightOccluderBuffer,
-    GpuLightPassParams,
-    GpuLightSourceBuffer,
-    GpuProbeDataBuffer,
-    GpuSkylightMaskBuffer,
+    GpuCameraParams, GpuLightOccluderBuffer, GpuLightPassParams, GpuLightSourceBuffer,
+    GpuProbeDataBuffer, GpuSkylightMaskBuffer,
+};
+
+use super::{
+    SHADER_PIPELINE_SDF, SHADER_PIPELINE_SS_BLEND, SHADER_PIPELINE_SS_BOUNCE,
+    SHADER_PIPELINE_SS_FILTER, SHADER_PIPELINE_SS_PROBE,
 };
 
 const SDF_TARGET_FORMAT: TextureFormat = TextureFormat::R16Float;
@@ -36,26 +34,22 @@ const SS_FILTER_PIPELINE_ENTRY: &str = "main";
 
 #[allow(dead_code)]
 #[derive(Clone, Resource, ExtractResource, Default)]
-pub struct GiTargetsWrapper
-{
+pub struct GiTargetsWrapper {
     pub targets: Option<GiTargets>,
 }
 
 #[derive(Clone)]
-pub struct GiTargets
-{
-    pub sdf_target:       Handle<Image>,
-    pub ss_probe_target:  Handle<Image>,
+pub struct GiTargets {
+    pub sdf_target: Handle<Image>,
+    pub ss_probe_target: Handle<Image>,
     pub ss_bounce_target: Handle<Image>,
-    pub ss_blend_target:  Handle<Image>,
+    pub ss_blend_target: Handle<Image>,
     pub ss_filter_target: Handle<Image>,
-    pub ss_pose_target:   Handle<Image>,
+    pub ss_pose_target: Handle<Image>,
 }
 
-impl GiTargets
-{
-    pub fn create(images: &mut Assets<Image>, sizes: &ComputedTargetSizes) -> Self
-    {
+impl GiTargets {
+    pub fn create(images: &mut Assets<Image>, sizes: &ComputedTargetSizes) -> Self {
         let sdf_tex = create_texture_2d(
             sizes.sdf_target_usize.into(),
             SDF_TARGET_FORMAT,
@@ -73,6 +67,7 @@ impl GiTargets
         );
         let ss_blend_tex = create_texture_2d(
             sizes.probe_grid_usize.into(),
+            // sizes.primary_target_usize.into(),
             SS_BLEND_TARGET_FORMAT,
             ImageFilterMode::Nearest,
         );
@@ -86,6 +81,8 @@ impl GiTargets
             SS_POSE_TARGET_FORMAT,
             ImageFilterMode::Nearest,
         );
+
+        log::info!("{:?}", sizes.primary_target_usize);
 
         let sdf_target: Handle<Image> = Handle::weak_from_u128(2390847209461232343);
         let ss_probe_target: Handle<Image> = Handle::weak_from_u128(3423231236817235162);
@@ -114,17 +111,20 @@ impl GiTargets
 
 #[allow(dead_code)]
 #[derive(Resource)]
-pub struct LightPassPipelineBindGroups
-{
-    pub sdf_bind_group:       BindGroup,
-    pub ss_blend_bind_group:  BindGroup,
-    pub ss_probe_bind_group:  BindGroup,
+pub struct LightPassPipelineBindGroups {
+    pub sdf_bind_group: BindGroup,
+    pub ss_blend_bind_group: BindGroup,
+    pub ss_probe_bind_group: BindGroup,
     pub ss_bounce_bind_group: BindGroup,
     pub ss_filter_bind_group: BindGroup,
 }
 
 #[rustfmt::skip]
 fn create_texture_2d(size: (u32, u32), format: TextureFormat, filter: ImageFilterMode) -> Image {
+    let bpp = format.pixel_size();
+    let byte_size = (size.0 * size.1) as usize * bpp;
+    let initial_data = vec![0u8; byte_size];
+
     let mut image = Image::new_fill(
         Extent3d {
             width: size.0,
@@ -132,12 +132,7 @@ fn create_texture_2d(size: (u32, u32), format: TextureFormat, filter: ImageFilte
             ..Default::default()
         },
         TextureDimension::D2,
-        &[
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
-        ],
+        &initial_data,
         format,
         RenderAssetUsages::default(),
     );
@@ -167,18 +162,17 @@ pub fn system_setup_gi_pipeline(
 }
 
 #[derive(Resource)]
-pub struct LightPassPipeline
-{
-    pub sdf_bind_group_layout:       BindGroupLayout,
-    pub sdf_pipeline:                CachedComputePipelineId,
-    pub ss_probe_bind_group_layout:  BindGroupLayout,
-    pub ss_probe_pipeline:           CachedComputePipelineId,
+pub struct LightPassPipeline {
+    pub sdf_bind_group_layout: BindGroupLayout,
+    pub sdf_pipeline: CachedComputePipelineId,
+    pub ss_probe_bind_group_layout: BindGroupLayout,
+    pub ss_probe_pipeline: CachedComputePipelineId,
     pub ss_bounce_bind_group_layout: BindGroupLayout,
-    pub ss_bounce_pipeline:          CachedComputePipelineId,
-    pub ss_blend_bind_group_layout:  BindGroupLayout,
-    pub ss_blend_pipeline:           CachedComputePipelineId,
+    pub ss_bounce_pipeline: CachedComputePipelineId,
+    pub ss_blend_bind_group_layout: BindGroupLayout,
+    pub ss_blend_pipeline: CachedComputePipelineId,
     pub ss_filter_bind_group_layout: BindGroupLayout,
-    pub ss_filter_pipeline:          CachedComputePipelineId,
+    pub ss_filter_pipeline: CachedComputePipelineId,
 }
 
 pub fn system_queue_bind_groups(
@@ -188,8 +182,7 @@ pub fn system_queue_bind_groups(
     targets_wrapper: Res<GiTargetsWrapper>,
     gi_compute_assets: Res<LightPassPipelineAssets>,
     render_device: Res<RenderDevice>,
-)
-{
+) {
     if let (
         Some(light_sources),
         Some(light_occluders),
@@ -234,15 +227,15 @@ pub fn system_queue_bind_groups(
             &pipeline.sdf_bind_group_layout,
             &[
                 BindGroupEntry {
-                    binding:  0,
+                    binding: 0,
                     resource: camera_params.clone(),
                 },
                 BindGroupEntry {
-                    binding:  1,
+                    binding: 1,
                     resource: light_occluders.clone(),
                 },
                 BindGroupEntry {
-                    binding:  2,
+                    binding: 2,
                     resource: BindingResource::TextureView(&sdf_view_image.texture_view),
                 },
             ],
@@ -253,35 +246,35 @@ pub fn system_queue_bind_groups(
             &pipeline.ss_probe_bind_group_layout,
             &[
                 BindGroupEntry {
-                    binding:  0,
+                    binding: 0,
                     resource: camera_params.clone(),
                 },
                 BindGroupEntry {
-                    binding:  1,
+                    binding: 1,
                     resource: gi_state.clone(),
                 },
                 BindGroupEntry {
-                    binding:  2,
+                    binding: 2,
                     resource: probes.clone(),
                 },
                 BindGroupEntry {
-                    binding:  3,
+                    binding: 3,
                     resource: skylight_masks.clone(),
                 },
                 BindGroupEntry {
-                    binding:  4,
+                    binding: 4,
                     resource: light_sources.clone(),
                 },
                 BindGroupEntry {
-                    binding:  5,
+                    binding: 5,
                     resource: BindingResource::TextureView(&sdf_view_image.texture_view),
                 },
                 BindGroupEntry {
-                    binding:  6,
+                    binding: 6,
                     resource: BindingResource::Sampler(&sdf_view_image.sampler),
                 },
                 BindGroupEntry {
-                    binding:  7,
+                    binding: 7,
                     resource: BindingResource::TextureView(&ss_probe_image.texture_view),
                 },
             ],
@@ -292,27 +285,27 @@ pub fn system_queue_bind_groups(
             &pipeline.ss_bounce_bind_group_layout,
             &[
                 BindGroupEntry {
-                    binding:  0,
+                    binding: 0,
                     resource: camera_params.clone(),
                 },
                 BindGroupEntry {
-                    binding:  1,
+                    binding: 1,
                     resource: gi_state.clone(),
                 },
                 BindGroupEntry {
-                    binding:  2,
+                    binding: 2,
                     resource: BindingResource::TextureView(&sdf_view_image.texture_view),
                 },
                 BindGroupEntry {
-                    binding:  3,
+                    binding: 3,
                     resource: BindingResource::Sampler(&sdf_view_image.sampler),
                 },
                 BindGroupEntry {
-                    binding:  4,
+                    binding: 4,
                     resource: BindingResource::TextureView(&ss_probe_image.texture_view),
                 },
                 BindGroupEntry {
-                    binding:  5,
+                    binding: 5,
                     resource: BindingResource::TextureView(&ss_bounce_image.texture_view),
                 },
             ],
@@ -323,31 +316,31 @@ pub fn system_queue_bind_groups(
             &pipeline.ss_blend_bind_group_layout,
             &[
                 BindGroupEntry {
-                    binding:  0,
+                    binding: 0,
                     resource: camera_params.clone(),
                 },
                 BindGroupEntry {
-                    binding:  1,
+                    binding: 1,
                     resource: gi_state.clone(),
                 },
                 BindGroupEntry {
-                    binding:  2,
+                    binding: 2,
                     resource: probes.clone(),
                 },
                 BindGroupEntry {
-                    binding:  3,
+                    binding: 3,
                     resource: BindingResource::TextureView(&sdf_view_image.texture_view),
                 },
                 BindGroupEntry {
-                    binding:  4,
+                    binding: 4,
                     resource: BindingResource::Sampler(&sdf_view_image.sampler),
                 },
                 BindGroupEntry {
-                    binding:  5,
+                    binding: 5,
                     resource: BindingResource::TextureView(&ss_bounce_image.texture_view),
                 },
                 BindGroupEntry {
-                    binding:  6,
+                    binding: 6,
                     resource: BindingResource::TextureView(&ss_blend_image.texture_view),
                 },
             ],
@@ -358,35 +351,35 @@ pub fn system_queue_bind_groups(
             &pipeline.ss_filter_bind_group_layout,
             &[
                 BindGroupEntry {
-                    binding:  0,
+                    binding: 0,
                     resource: camera_params.clone(),
                 },
                 BindGroupEntry {
-                    binding:  1,
+                    binding: 1,
                     resource: gi_state.clone(),
                 },
                 BindGroupEntry {
-                    binding:  2,
+                    binding: 2,
                     resource: probes.clone(),
                 },
                 BindGroupEntry {
-                    binding:  3,
+                    binding: 3,
                     resource: BindingResource::TextureView(&sdf_view_image.texture_view),
                 },
                 BindGroupEntry {
-                    binding:  4,
+                    binding: 4,
                     resource: BindingResource::Sampler(&sdf_view_image.sampler),
                 },
                 BindGroupEntry {
-                    binding:  5,
+                    binding: 5,
                     resource: BindingResource::TextureView(&ss_blend_image.texture_view),
                 },
                 BindGroupEntry {
-                    binding:  6,
+                    binding: 6,
                     resource: BindingResource::TextureView(&ss_filter_image.texture_view),
                 },
                 BindGroupEntry {
-                    binding:  7,
+                    binding: 7,
                     resource: BindingResource::TextureView(&ss_pose_image.texture_view),
                 },
             ],
@@ -402,10 +395,8 @@ pub fn system_queue_bind_groups(
     }
 }
 
-impl FromWorld for LightPassPipeline
-{
-    fn from_world(world: &mut World) -> Self
-    {
+impl FromWorld for LightPassPipeline {
+    fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
 
         let sdf_bind_group_layout = render_device.create_bind_group_layout(
@@ -413,36 +404,36 @@ impl FromWorld for LightPassPipeline
             &[
                 // Camera.
                 BindGroupLayoutEntry {
-                    binding:    0,
+                    binding: 0,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuCameraParams::min_size()),
+                        min_binding_size: Some(GpuCameraParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // Light occluders.
                 BindGroupLayoutEntry {
-                    binding:    1,
+                    binding: 1,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Storage { read_only: true },
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuLightOccluderBuffer::min_size()),
+                        min_binding_size: Some(GpuLightOccluderBuffer::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF texture.
                 BindGroupLayoutEntry {
-                    binding:    2,
+                    binding: 2,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::ReadWrite,
-                        format:         SDF_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadWrite,
+                        format: SDF_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
             ],
         );
@@ -452,87 +443,87 @@ impl FromWorld for LightPassPipeline
             &[
                 // Camera.
                 BindGroupLayoutEntry {
-                    binding:    0,
+                    binding: 0,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuCameraParams::min_size()),
+                        min_binding_size: Some(GpuCameraParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // GI State.
                 BindGroupLayoutEntry {
-                    binding:    1,
+                    binding: 1,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuLightPassParams::min_size()),
+                        min_binding_size: Some(GpuLightPassParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // Probes.
                 BindGroupLayoutEntry {
-                    binding:    2,
+                    binding: 2,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Storage { read_only: true },
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuProbeDataBuffer::min_size()),
+                        min_binding_size: Some(GpuProbeDataBuffer::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SkylightMasks.
                 BindGroupLayoutEntry {
-                    binding:    3,
+                    binding: 3,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Storage { read_only: true },
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuSkylightMaskBuffer::min_size()),
+                        min_binding_size: Some(GpuSkylightMaskBuffer::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // Light sources.
                 BindGroupLayoutEntry {
-                    binding:    4,
+                    binding: 4,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Storage { read_only: true },
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuLightSourceBuffer::min_size()),
+                        min_binding_size: Some(GpuLightSourceBuffer::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF.
                 BindGroupLayoutEntry {
-                    binding:    5,
+                    binding: 5,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Texture {
-                        sample_type:    TextureSampleType::Float { filterable: true },
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
                         view_dimension: TextureViewDimension::D2,
-                        multisampled:   false,
+                        multisampled: false,
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF Sampler.
                 BindGroupLayoutEntry {
-                    binding:    6,
+                    binding: 6,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Sampler(SamplerBindingType::Filtering),
-                    count:      None,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
                 },
                 // SS Probe.
                 BindGroupLayoutEntry {
-                    binding:    7,
+                    binding: 7,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::WriteOnly,
-                        format:         SS_PROBE_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::WriteOnly,
+                        format: SS_PROBE_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
             ],
         );
@@ -542,65 +533,65 @@ impl FromWorld for LightPassPipeline
             &[
                 // Camera.
                 BindGroupLayoutEntry {
-                    binding:    0,
+                    binding: 0,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuCameraParams::min_size()),
+                        min_binding_size: Some(GpuCameraParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // GI State.
                 BindGroupLayoutEntry {
-                    binding:    1,
+                    binding: 1,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuLightPassParams::min_size()),
+                        min_binding_size: Some(GpuLightPassParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF.
                 BindGroupLayoutEntry {
-                    binding:    2,
+                    binding: 2,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Texture {
-                        sample_type:    TextureSampleType::Float { filterable: true },
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
                         view_dimension: TextureViewDimension::D2,
-                        multisampled:   false,
+                        multisampled: false,
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF Sampler.
                 BindGroupLayoutEntry {
-                    binding:    3,
+                    binding: 3,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Sampler(SamplerBindingType::Filtering),
-                    count:      None,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
                 },
                 // SS Probe.
                 BindGroupLayoutEntry {
-                    binding:    4,
+                    binding: 4,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::ReadOnly,
-                        format:         SS_PROBE_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadOnly,
+                        format: SS_PROBE_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SS Bounce.
                 BindGroupLayoutEntry {
-                    binding:    5,
+                    binding: 5,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::WriteOnly,
-                        format:         SS_BOUNCE_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::WriteOnly,
+                        format: SS_BOUNCE_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
             ],
         );
@@ -610,76 +601,76 @@ impl FromWorld for LightPassPipeline
             &[
                 // Camera.
                 BindGroupLayoutEntry {
-                    binding:    0,
+                    binding: 0,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuCameraParams::min_size()),
+                        min_binding_size: Some(GpuCameraParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // GI State.
                 BindGroupLayoutEntry {
-                    binding:    1,
+                    binding: 1,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuLightPassParams::min_size()),
+                        min_binding_size: Some(GpuLightPassParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // Probes.
                 BindGroupLayoutEntry {
-                    binding:    2,
+                    binding: 2,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Storage { read_only: true },
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuProbeDataBuffer::min_size()),
+                        min_binding_size: Some(GpuProbeDataBuffer::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF.
                 BindGroupLayoutEntry {
-                    binding:    3,
+                    binding: 3,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Texture {
-                        sample_type:    TextureSampleType::Float { filterable: true },
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
                         view_dimension: TextureViewDimension::D2,
-                        multisampled:   false,
+                        multisampled: false,
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF Sampler.
                 BindGroupLayoutEntry {
-                    binding:    4,
+                    binding: 4,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Sampler(SamplerBindingType::Filtering),
-                    count:      None,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
                 },
                 // SS Bounces.
                 BindGroupLayoutEntry {
-                    binding:    5,
+                    binding: 5,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::ReadOnly,
-                        format:         SS_BOUNCE_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadOnly,
+                        format: SS_BOUNCE_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SS Blend.
                 BindGroupLayoutEntry {
-                    binding:    6,
+                    binding: 6,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::WriteOnly,
-                        format:         SS_BLEND_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::WriteOnly,
+                        format: SS_BLEND_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
             ],
         );
@@ -689,146 +680,145 @@ impl FromWorld for LightPassPipeline
             &[
                 // Camera.
                 BindGroupLayoutEntry {
-                    binding:    0,
+                    binding: 0,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuCameraParams::min_size()),
+                        min_binding_size: Some(GpuCameraParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // GI State.
                 BindGroupLayoutEntry {
-                    binding:    1,
+                    binding: 1,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Uniform,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuLightPassParams::min_size()),
+                        min_binding_size: Some(GpuLightPassParams::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // Probes.
                 BindGroupLayoutEntry {
-                    binding:    2,
+                    binding: 2,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Buffer {
-                        ty:                 BufferBindingType::Storage { read_only: true },
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size:   Some(GpuProbeDataBuffer::min_size()),
+                        min_binding_size: Some(GpuProbeDataBuffer::min_size()),
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF.
                 BindGroupLayoutEntry {
-                    binding:    3,
+                    binding: 3,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Texture {
-                        sample_type:    TextureSampleType::Float { filterable: true },
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
                         view_dimension: TextureViewDimension::D2,
-                        multisampled:   false,
+                        multisampled: false,
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SDF Sampler.
                 BindGroupLayoutEntry {
-                    binding:    4,
+                    binding: 4,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::Sampler(SamplerBindingType::Filtering),
-                    count:      None,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
                 },
                 // SS Blend.
                 BindGroupLayoutEntry {
-                    binding:    5,
+                    binding: 5,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::ReadOnly,
-                        format:         SS_BLEND_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadOnly,
+                        format: SS_BLEND_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SS Filter.
                 BindGroupLayoutEntry {
-                    binding:    6,
+                    binding: 6,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::WriteOnly,
-                        format:         SS_FILTER_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::WriteOnly,
+                        format: SS_FILTER_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
                 // SS pose.
                 BindGroupLayoutEntry {
-                    binding:    7,
+                    binding: 7,
                     visibility: ShaderStages::COMPUTE,
-                    ty:         BindingType::StorageTexture {
-                        access:         StorageTextureAccess::WriteOnly,
-                        format:         SS_POSE_TARGET_FORMAT,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::WriteOnly,
+                        format: SS_POSE_TARGET_FORMAT,
                         view_dimension: TextureViewDimension::D2,
                     },
-                    count:      None,
+                    count: None,
                 },
             ],
         );
 
         let (shader_sdf, gi_ss_probe, gi_ss_bounce, gi_ss_blend, gi_ss_filter) = {
-            let assets_server = world.resource::<AssetServer>();
             (
-                assets_server.load("shaders/gi_sdf.wgsl"),
-                assets_server.load("shaders/gi_ss_probe.wgsl"),
-                assets_server.load("shaders/gi_ss_bounce.wgsl"),
-                assets_server.load("shaders/gi_ss_blend.wgsl"),
-                assets_server.load("shaders/gi_ss_filter.wgsl"),
+                SHADER_PIPELINE_SDF,
+                SHADER_PIPELINE_SS_PROBE,
+                SHADER_PIPELINE_SS_BOUNCE,
+                SHADER_PIPELINE_SS_BLEND,
+                SHADER_PIPELINE_SS_FILTER,
             )
         };
 
         let pipeline_cache = world.resource_mut::<PipelineCache>();
 
         let sdf_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label:                Some("gi_sdf_pipeline".into()),
-            layout:               vec![sdf_bind_group_layout.clone()],
-            shader:               shader_sdf,
-            shader_defs:          vec![],
-            entry_point:          SDF_PIPELINE_ENTRY.into(),
+            label: Some("gi_sdf_pipeline".into()),
+            layout: vec![sdf_bind_group_layout.clone()],
+            shader: shader_sdf,
+            shader_defs: vec![],
+            entry_point: SDF_PIPELINE_ENTRY.into(),
             push_constant_ranges: vec![],
         });
 
         let ss_probe_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label:                Some("gi_ss_probe_pipeline".into()),
-            layout:               vec![ss_probe_bind_group_layout.clone()],
-            shader:               gi_ss_probe,
-            shader_defs:          vec![],
-            entry_point:          SS_PROBE_PIPELINE_ENTRY.into(),
+            label: Some("gi_ss_probe_pipeline".into()),
+            layout: vec![ss_probe_bind_group_layout.clone()],
+            shader: gi_ss_probe,
+            shader_defs: vec![],
+            entry_point: SS_PROBE_PIPELINE_ENTRY.into(),
             push_constant_ranges: vec![],
         });
 
         let ss_bounce_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label:                Some("gi_ss_bounce_pipeline".into()),
-            layout:               vec![ss_bounce_bind_group_layout.clone()],
-            shader:               gi_ss_bounce,
-            shader_defs:          vec![],
-            entry_point:          SS_BOUNCE_PIPELINE_ENTRY.into(),
+            label: Some("gi_ss_bounce_pipeline".into()),
+            layout: vec![ss_bounce_bind_group_layout.clone()],
+            shader: gi_ss_bounce,
+            shader_defs: vec![],
+            entry_point: SS_BOUNCE_PIPELINE_ENTRY.into(),
             push_constant_ranges: vec![],
         });
 
         let ss_blend_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label:                Some("gi_blend_pipeline".into()),
-            layout:               vec![ss_blend_bind_group_layout.clone()],
-            shader:               gi_ss_blend,
-            shader_defs:          vec![],
-            entry_point:          SS_BLEND_PIPELINE_ENTRY.into(),
+            label: Some("gi_blend_pipeline".into()),
+            layout: vec![ss_blend_bind_group_layout.clone()],
+            shader: gi_ss_blend,
+            shader_defs: vec![],
+            entry_point: SS_BLEND_PIPELINE_ENTRY.into(),
             push_constant_ranges: vec![],
         });
 
         let ss_filter_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label:                Some("gi_filer_pipeline".into()),
-            layout:               vec![ss_filter_bind_group_layout.clone()],
-            shader:               gi_ss_filter,
-            shader_defs:          vec![],
-            entry_point:          SS_FILTER_PIPELINE_ENTRY.into(),
+            label: Some("gi_filer_pipeline".into()),
+            layout: vec![ss_filter_bind_group_layout.clone()],
+            shader: gi_ss_filter,
+            shader_defs: vec![],
+            entry_point: SS_FILTER_PIPELINE_ENTRY.into(),
             push_constant_ranges: vec![],
         });
 

@@ -96,6 +96,17 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
                 0.3
             );
 
+            // if (raymarch_sample_to_probe.success > 0) {
+            //     // Visualize successful raymarching with green
+            //     textureStore(ss_bounce_out, out_atlas_tile_pose, vec4<f32>(0.0, 1.0, 0.0, 1.0));
+            // } else {
+            //     // Visualize failed raymarching with red
+            //     textureStore(ss_bounce_out, out_atlas_tile_pose, vec4<f32>(1.0, 0.0, 0.0, 1.0));
+            //     continue;
+            // }
+
+            // textureStore(ss_bounce_out, out_atlas_tile_pose, raymarch_sample_to_probe.debug_color);
+
             if raymarch_sample_to_probe.success <= 0 {
                 continue;
             }

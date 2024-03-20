@@ -7,6 +7,7 @@ struct RayMarchResult {
     success:  i32,      //
     step: i32,          // steps
     pose: vec2<f32>,    // curr spot
+    debug_color: vec4<f32>
 }
 
 fn raymarch(
@@ -47,18 +48,18 @@ fn raymarch(
         h = ray_origin + ray_progress * ray_direction;
 
         if ((ray_progress * ray_progress >= stop_at) || (inside && (ray_progress * ray_progress > max_inside_dist))) {
-            return RayMarchResult(1, i, h_prev);
+            return RayMarchResult(1, i, h_prev, vec4<f32>(0.0, 0.0, 1.0, 1.0));
         }
 
 
         let uv = world_to_sdf_uv(h, camera_params.view_proj, camera_params.inv_sdf_scale);
         if any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) {
-            return RayMarchResult(0, i, h_prev);
+            return RayMarchResult(0, i, h_prev, vec4<f32>(1.0, 0.0, 0.0, 1.0));
         }
 
         let scene_dist = bilinear_sample_r(sdf, sdf_sampler, uv);
         if ((scene_dist <= min_sdf && !inside)) {
-            return RayMarchResult(0, i, h);
+            return RayMarchResult(0, i, h, vec4<f32>(1.0, 0.0, 0.0, 1.0));
         }
         if (scene_dist > 0.0) {
             inside = false;
@@ -74,7 +75,7 @@ fn raymarch(
         }
     }
 
-    return RayMarchResult(0, max_steps, h);
+    return RayMarchResult(0, max_steps, h, vec4<f32>(1.0, 0.0, 0.0, 1.0));
 }
 
 fn raymarch_primary(
@@ -104,18 +105,18 @@ fn raymarch_primary(
         h = ray_origin + ray_progress * ray_direction;
 
         if ray_progress * ray_progress >= stop_at {
-            return RayMarchResult(1, i, h_prev);
+            return RayMarchResult(1, i, h_prev, vec4<f32>(0.0, 0.0, 1.0, 1.0));
         }
 
 
         let uv = world_to_sdf_uv(h, camera_params.view_proj, camera_params.inv_sdf_scale);
         if any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) {
-            return RayMarchResult(0, i, h_prev);
+            return RayMarchResult(0, i, h_prev, vec4<f32>(1.0, 0.0, 0.0, 1.0));
         }
 
         let scene_dist = bilinear_sample_r(sdf, sdf_sampler, uv);
         if scene_dist <= min_sdf {
-            return RayMarchResult(0, i, h);
+            return RayMarchResult(0, i, h, vec4<f32>(1.0, 0.0, 0.0, 1.0));
         }
 
         let ray_travel = max(abs(scene_dist), 0.0);
@@ -123,7 +124,7 @@ fn raymarch_primary(
         ray_progress += ray_travel * (1.0 - rm_jitter_contrib) + rm_jitter_contrib * ray_travel * hash(h);
    }
 
-    return RayMarchResult(0, max_steps, h);
+    return RayMarchResult(0, max_steps, h, vec4<f32>(1.0, 0.0, 0.0, 1.0));
 }
 
 
@@ -155,7 +156,8 @@ fn raymarch_bounce(
     var ray_progress:   f32    = 0.0;
     var h                      = vec2<f32>(0.0);
     var h_prev                 = h;
-    let min_sdf                = 1e-4;
+    // let min_sdf                = 1e-4;
+    let min_sdf = 1e-5;
 
     for (var i: i32 = 0; i < max_steps; i++) {
 
@@ -163,17 +165,17 @@ fn raymarch_bounce(
         h = ray_origin + ray_progress * ray_direction;
 
         if ray_progress * ray_progress >= stop_at {
-            return RayMarchResult(1, i, h_prev);
+            return RayMarchResult(1, i, h_prev, vec4<f32>(0.0, 0.0, 1.0, 1.0));
         }
 
         let uv = world_to_sdf_uv(h, camera_params.view_proj, camera_params.inv_sdf_scale);
         if any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) {
-            return RayMarchResult(0, i, h_prev);
+            return RayMarchResult(0, i, h_prev, vec4<f32>(1.0, 0.0, 0.0, 1.0));
         }
 
         let scene_dist = bilinear_sample_r(sdf, sdf_sampler, uv);
         if  scene_dist <= min_sdf {
-            return RayMarchResult(0, i, h);
+            return RayMarchResult(0, i, h, vec4<f32>(1.0, 0.0, 0.0, 1.0));
         }
 
         let ray_travel = max(abs(scene_dist), 0.5);
@@ -182,5 +184,5 @@ fn raymarch_bounce(
                       + rm_jitter_contrib * ray_travel * hash(h);
     }
 
-    return RayMarchResult(0, max_steps, h);
+    return RayMarchResult(0, max_steps, h, vec4<f32>(1.0, 0.0, 0.0, 1.0));
 }

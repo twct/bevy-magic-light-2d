@@ -19,7 +19,7 @@ use bevy::{
     },
 };
 
-use super::pipeline::GiTargetsWrapper;
+use super::{pipeline::GiTargetsWrapper, SHADER_POST_PROCESS};
 
 #[derive(Default, Debug, Clone, Hash, PartialEq, Eq, RenderLabel)]
 pub struct LightPostProcessNode;
@@ -62,18 +62,15 @@ impl ViewNode for LightPostProcessNode {
 
         let gi_targets_wrapper = world.resource::<GiTargetsWrapper>();
 
-        // Use as_ref() to get an Option<&T> from Option<T>
-        let irradiance_image_view = &gi_targets_wrapper
-            .targets
-            .as_ref()
-            .unwrap()
-            .ss_filter_target;
-
         let image_handle = gi_targets_wrapper
             .targets
             .as_ref()
             .unwrap()
             .ss_filter_target
+            // .ss_bounce_target
+            // .ss_pose_target
+            // .ss_probe_target
+            // .ss_blend_target
             .clone(); // Clone the handle to use it for lookup
 
         let texture_views = world.resource::<RenderAssets<Image>>();
@@ -187,11 +184,6 @@ impl FromWorld for LightPostProcessPipeline {
         // We can create the sampler here since it won't change at runtime and doesn't depend on the view
         let sampler = render_device.create_sampler(&SamplerDescriptor::default());
 
-        // Get the shader handle
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/gi_post_process.wgsl");
-
         let pipeline_id = world
             .resource_mut::<PipelineCache>()
             // This will add the pipeline to the cache and queue it's creation
@@ -201,7 +193,7 @@ impl FromWorld for LightPostProcessPipeline {
                 // This will setup a fullscreen triangle for the vertex state
                 vertex: fullscreen_shader_vertex_state(),
                 fragment: Some(FragmentState {
-                    shader,
+                    shader: SHADER_POST_PROCESS.clone(),
                     shader_defs: vec![],
                     // Make sure this matches the entry point of your shader.
                     // It can be anything as long as it matches here and in the shader.
