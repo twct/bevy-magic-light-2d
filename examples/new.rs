@@ -1,4 +1,5 @@
 use bevy::{
+    color::palettes::css::{MIDNIGHT_BLUE, ORANGE_RED},
     math::vec3,
     prelude::*,
     render::texture::{ImageFilterMode, ImageSamplerDescriptor},
@@ -31,7 +32,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 
     commands.spawn(SkylightLight2D {
-        color: Color::MIDNIGHT_BLUE,
+        color: MIDNIGHT_BLUE.into(),
         // intensity: 0.1,
         intensity: 0.8,
     });
@@ -39,7 +40,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         SpatialBundle::default(),
         OmniLightSource2D {
-            color: Color::ORANGE_RED,
+            color: ORANGE_RED.into(),
             intensity: 0.5,
             falloff: vec3(80.0, 20.0, 0.05),
             jitter_intensity: 0.1,

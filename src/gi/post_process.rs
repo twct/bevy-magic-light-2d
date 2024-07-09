@@ -14,7 +14,7 @@ use bevy::{
             TextureViewDimension,
         },
         renderer::RenderDevice,
-        texture::BevyDefault,
+        texture::{BevyDefault, GpuImage},
         view::ViewTarget,
     },
 };
@@ -73,7 +73,7 @@ impl ViewNode for LightPostProcessNode {
             // .ss_blend_target
             .clone(); // Clone the handle to use it for lookup
 
-        let texture_views = world.resource::<RenderAssets<Image>>();
+        let texture_views = world.resource::<RenderAssets<GpuImage>>();
         let irradiance_texture_view = if let Some(gpu_image) = texture_views.get(&image_handle) {
             &gpu_image.texture_view
         } else {

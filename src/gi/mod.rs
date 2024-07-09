@@ -145,7 +145,7 @@ impl Plugin for BevyMagicLight2DPlugin {
             Shader::from_wgsl
         );
 
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
 
@@ -159,7 +159,7 @@ impl Plugin for BevyMagicLight2DPlugin {
                 ),
             );
 
-        let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
+        let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
         render_graph.add_node(LightPass2DRenderLabel, LightPass2DNode::default());
         render_graph.add_node_edge(
             LightPass2DRenderLabel,
@@ -190,7 +190,7 @@ impl Plugin for BevyMagicLight2DPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
         render_app

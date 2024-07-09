@@ -76,7 +76,7 @@ pub fn system_extract_pipeline_assets(
         for (transform, light_source, hviz, vviz) in query_lights.iter() {
             if hviz.get() && vviz.get() {
                 light_sources.count += 1;
-                light_sources.data.push(GpuOmniLightSource::new(
+                if let Some(light_source) = GpuOmniLightSource::new(
                     OmniLightSource2D {
                         intensity: light_source.intensity
                             + rng.gen_range(-1.0..1.0) * light_source.jitter_intensity,
@@ -87,8 +87,11 @@ pub fn system_extract_pipeline_assets(
                             + rng.gen_range(-1.0..1.0) * light_source.jitter_translation,
                         transform.translation().y
                             + rng.gen_range(-1.0..1.0) * light_source.jitter_translation,
-                    ),
-                ));
+                    )) {
+                        light_sources.data.push(light_source);
+                    }
+                // light_sources.data.push(,
+                // ));
             }
         }
     }
@@ -125,7 +128,7 @@ pub fn system_extract_pipeline_assets(
     {
         if let Ok((camera, camera_global_transform)) = query_camera.get_single() {
             let camera_params = gpu_pipeline_assets.camera_params.get_mut();
-            let projection = camera.projection_matrix();
+            let projection = camera.clip_from_view();
             let inverse_projection = projection.inverse();
             let view = camera_global_transform.compute_matrix();
             let inverse_view = view.inverse();
@@ -174,9 +177,11 @@ pub fn system_extract_pipeline_assets(
         let light_pass_params = gpu_pipeline_assets.light_pass_params.get_mut();
         light_pass_params.skylight_color = Vec3::splat(0.0);
         for new_gi_state in query_skylight_light.iter() {
-            light_pass_params.skylight_color.x += new_gi_state.color.r() * new_gi_state.intensity;
-            light_pass_params.skylight_color.y += new_gi_state.color.g() * new_gi_state.intensity;
-            light_pass_params.skylight_color.z += new_gi_state.color.b() * new_gi_state.intensity;
+            if let Color::Srgba(Srgba { red, green, blue, alpha: _ }) = new_gi_state.color {
+                light_pass_params.skylight_color.x += red * new_gi_state.intensity;
+                light_pass_params.skylight_color.y += green * new_gi_state.intensity;
+                light_pass_params.skylight_color.z += blue * new_gi_state.intensity;
+            }
         }
     }
 

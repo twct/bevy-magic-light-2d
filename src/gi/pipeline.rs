@@ -4,7 +4,8 @@ use bevy::render::render_asset::{RenderAssetUsages, RenderAssets};
 use bevy::render::render_resource::*;
 use bevy::render::renderer::RenderDevice;
 use bevy::render::texture::{
-    ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor, TextureFormatPixelInfo,
+    GpuImage, ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor,
+    TextureFormatPixelInfo,
 };
 
 use crate::gi::pipeline_assets::LightPassPipelineAssets;
@@ -91,12 +92,12 @@ impl GiTargets {
         let ss_filter_target: Handle<Image> = Handle::weak_from_u128(8761232615172413412);
         let ss_pose_target: Handle<Image> = Handle::weak_from_u128(4728165084756128470);
 
-        images.insert(sdf_target.clone(), sdf_tex);
-        images.insert(ss_probe_target.clone(), ss_probe_tex);
-        images.insert(ss_bounce_target.clone(), ss_bounce_tex);
-        images.insert(ss_blend_target.clone(), ss_blend_tex);
-        images.insert(ss_filter_target.clone(), ss_filter_tex);
-        images.insert(ss_pose_target.clone(), ss_pose_tex);
+        images.insert(&sdf_target, sdf_tex);
+        images.insert(&ss_probe_target, ss_probe_tex);
+        images.insert(&ss_bounce_target, ss_bounce_tex);
+        images.insert(&ss_blend_target, ss_blend_tex);
+        images.insert(&ss_filter_target, ss_filter_tex);
+        images.insert(&ss_pose_target, ss_pose_tex);
 
         Self {
             sdf_target,
@@ -178,7 +179,7 @@ pub struct LightPassPipeline {
 pub fn system_queue_bind_groups(
     mut commands: Commands,
     pipeline: Res<LightPassPipeline>,
-    gpu_images: Res<RenderAssets<Image>>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
     targets_wrapper: Res<GiTargetsWrapper>,
     gi_compute_assets: Res<LightPassPipelineAssets>,
     render_device: Res<RenderDevice>,
