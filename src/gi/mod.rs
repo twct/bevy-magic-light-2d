@@ -228,6 +228,8 @@ pub fn handle_window_resize(
         *res_target_sizes =
             ComputedTargetSizes::from_window(window, &res_plugin_config.target_scaling_params);
 
+            if res_target_sizes.primary_target_isize != IVec2::ZERO{
+
         // assets_material.insert(
         //     POST_PROCESSING_MATERIAL.clone(),
         //     PostProcessingMaterial::create(&res_camera_targets, &res_gi_targets_wrapper),
@@ -235,6 +237,7 @@ pub fn handle_window_resize(
 
         *res_gi_targets_wrapper = GiTargetsWrapper{targets: Some(GiTargets::create(&mut assets_image, &res_target_sizes))};
         // *res_camera_targets = CameraTargets::create(&mut assets_image, &res_target_sizes);
+        }
     }
 }
 
